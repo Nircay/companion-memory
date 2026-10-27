@@ -1,0 +1,33 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: smoke test
+        run: |
+          set -e
+          python memory.py init
+          python memory.py add person --json '{"platform_id":"10001","nickname":"小王","note":"爱用反问"}'
+          python memory.py add fact --person 1 --key "口味" --value "怕辣" --confidence 0.9
+          python memory.py add event --text "今天带她去海边看了日落，风很大" --importance 0.9
+          python memory.py add utterance --text "才不是呢！" --channel "group:1" --outcome 0.8
+          python memory.py journal --date 2026-10-27 --title "第一次看海" --body "风很大。"
+          python memory.py verify
+          python memory.py search "海边"        | grep -q "diary#1"
+          python memory.py search "怕辣"        | grep -q "people_facts#1"
+          python memory.py search "量子物理"    | grep -q "无命中"
+          python memory.py recall "她还记得海吗" | grep -q "关于这些"
+          python memory.py export ./export
+          test -f export/journals/2026-10-27.md
