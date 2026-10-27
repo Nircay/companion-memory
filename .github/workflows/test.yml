@@ -17,7 +17,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: smoke test
         run: |
-          set -e
+          set -ex
           python memory.py init
           python memory.py add person --json '{"platform_id":"10001","nickname":"小王","note":"爱用反问"}'
           python memory.py add fact --person 1 --key "口味" --value "怕辣" --confidence 0.9
@@ -34,3 +34,16 @@ jobs:
           python memory.py recall "她还记得海吗" | grep -q "关于这些"
           python memory.py export ./export
           test -f export/journals/2026-10-27.md
+      - name: diagnose
+        if: failure()
+        run: |
+          python -c "import sqlite3,sys;print('sqlite',sqlite3.sqlite_version,'| py',sys.version)"
+          python memory.py stats
+          echo '--- search 海边 ---'; python memory.py search "海边" || true
+          echo '--- search 2026-10-27 ---'; python memory.py search "2026-10-27" || true
+          echo '--- search BV ---'; python memory.py search "BV1xx411c7mD" || true
+          echo '--- db dump ---'; python -c "
+import sqlite3
+c=sqlite3.connect('whale_memory.db')
+print(c.execute('select domain,ref_id,tokens from search_index').fetchall())
+" 
