@@ -231,7 +231,7 @@ DOMAINS = {
     "utterances":    ("utterances",    "text",      "ts",         None),
     "promises":      ("promises",      "text",      "ts",         None),
     "media":         ("media",         "COALESCE(caption,'') || ' ' || COALESCE(tags,'')", "ts", None),
-    "watch_history": ("watch_history", "COALESCE(title,'') || ' ' || COALESCE(summary,'') || ' ' || COALESCE(reaction,'')", "ts", None),
+    "watch_history": ("watch_history", "COALESCE(bvid,'') || ' ' || COALESCE(title,'') || ' ' || COALESCE(summary,'') || ' ' || COALESCE(reaction,'')", "ts", None),
     "dm":            ("dm",            "text",      "ts",         None),
     "self_actions":  ("self_actions",  "text",      "ts",         "outcome"),
 }
@@ -266,6 +266,8 @@ def tokenize(text: str) -> str:
     return " ".join(out)
 
 
+DATE_RE = re.compile(r"(\d{4})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})")
+
 STOP_CHARS = set(
     "的了吗呢吧啊呀嘛哦嗯是在有和就跟对把被让给还都也才又很太更最不没要会能可该"
     "她他它我你您得着过这那个些上下里中来去说想做起从到与及而以于之其此"
@@ -295,6 +297,25 @@ def content_chars(text: str) -> set[str]:
     for m in WORD.finditer(text):
         s.add(m.group(0).lower())
     return s
+
+
+def date_hits(conn, query: str):
+    """query 里带绝对日期（2026-10-27 / 2026年10月27日）时，直查那天的日记。
+
+    FTS 索引不含日期（日期 token 会污染覆盖率），所以日期查询走这条旁路。
+    """
+    m = DATE_RE.search(query or "")
+    if not m:
+        return []
+    y, mo, d = m.groups()
+    iso = f"{y}-{int(mo):02d}-{int(d):02d}"
+    out = []
+    for row in conn.execute(
+            "SELECT id, body, written_at FROM journals WHERE date = ?", (iso,)):
+        out.append({"domain": "journals", "id": row["id"], "text": row["body"] or "",
+                    "ts": row["written_at"], "importance": 0.7,
+                    "bm25": None, "coverage": 1.0})
+    return out
 
 
 def now_ms() -> int:
@@ -575,8 +596,6 @@ def search(conn, query: str, limit: int = 8):
             WHERE search_index MATCH ?
             ORDER BY rank
             LIMIT 200""", (expr,)).fetchall()
-    if not rows:
-        return []
 
     raw_scores = []
     for r in rows:
@@ -620,9 +639,17 @@ def search(conn, query: str, limit: int = 8):
             "bm25": -(r["rank"] or 0.0), "coverage": wcov,
         })
 
+    for h in date_hits(conn, query):
+        if any(x["domain"] == h["domain"] and x["id"] == h["id"] for x in raw_scores):
+            continue
+        raw_scores.append(h)
+
     if not raw_scores:
         return []
-    mx = max(s["bm25"] for s in raw_scores) or 1.0
+    mx = max((x["bm25"] for x in raw_scores if x["bm25"] is not None), default=1.0) or 1.0
+    for x in raw_scores:
+        if x["bm25"] is None:
+            x["bm25"] = mx
     now = now_ms()
     for s in raw_scores:
         norm_fts = s["bm25"] / mx

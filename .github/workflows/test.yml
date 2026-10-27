@@ -23,11 +23,14 @@ jobs:
           python memory.py add fact --person 1 --key "口味" --value "怕辣" --confidence 0.9
           python memory.py add event --text "今天带她去海边看了日落，风很大" --importance 0.9
           python memory.py add utterance --text "才不是呢！" --channel "group:1" --outcome 0.8
+          python memory.py add watch --bvid BV1xx411c7mD --title "深海纪录片" --summary "讲深海生态"
           python memory.py journal --date 2026-10-27 --title "第一次看海" --body "风很大。"
           python memory.py verify
           python memory.py search "海边"        | grep -q "diary#1"
           python memory.py search "怕辣"        | grep -q "people_facts#1"
           python memory.py search "量子物理"    | grep -q "无命中"
+          python memory.py search "2026-10-27"    | grep -q "journals#1"
+          python memory.py search "BV1xx411c7mD"  | grep -q "watch_history#1"
           python memory.py recall "她还记得海吗" | grep -q "关于这些"
           python memory.py export ./export
           test -f export/journals/2026-10-27.md
