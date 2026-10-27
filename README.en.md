@@ -2,6 +2,8 @@
 
 [中文](README.md) | English
 
+[![test](https://github.com/Nircay/companion-memory/actions/workflows/test.yml/badge.svg)](https://github.com/Nircay/companion-memory/actions/workflows/test.yml)
+
 A single-file, zero-dependency memory store for companion AI. Gives your character a hippocampus: it remembers people, events, and what it said itself.
 
 ```bash

@@ -2,6 +2,8 @@
 
 中文 | [English](README.en.md)
 
+[![test](https://github.com/Nircay/companion-memory/actions/workflows/test.yml/badge.svg)](https://github.com/Nircay/companion-memory/actions/workflows/test.yml)
+
 单文件、零依赖、跨平台的角色记忆库。给陪伴型 AI 一个"海马体"：记得人、记得事、记得自己说过什么。
 
 ```bash
