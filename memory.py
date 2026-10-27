@@ -358,13 +358,24 @@ def index_row(conn: sqlite3.Connection, domain: str, ref_id: int, text: str) -> 
 
 
 # ── 写入 ──────────────────────────────────────────────────────────────────
-def add_row(conn, domain, values, text_for_index, no_truncate=False):
+def index_from_row(conn: sqlite3.Connection, domain: str, row_id: int) -> None:
+    """按 DOMAINS 里的表达式重建一行索引。
+
+    写入与 reindex 必须走同一条路径：早先写入侧手写拼接、reindex 侧用表达式，
+    结果 watch_history 的写入漏了 bvid，`search "BV..."` 只在 reindex 后才命中。
+    """
+    table, text_expr, _, _ = DOMAINS[domain]
+    row = conn.execute(f"SELECT {text_expr} AS t FROM {table} WHERE id = ?", (row_id,)).fetchone()
+    index_row(conn, domain, row_id, (row["t"] if row else "") or "")
+
+
+def add_row(conn, domain, values, text_for_index=None, no_truncate=False):
     table = DOMAINS[domain][0]
     cols = ", ".join(values)
     marks = ", ".join("?" for _ in values)
     cur = conn.execute(f"INSERT INTO {table} ({cols}) VALUES ({marks})", tuple(values.values()))
     row_id = cur.lastrowid
-    index_row(conn, domain, row_id, text_for_index)
+    index_from_row(conn, domain, row_id)
     conn.commit()
     return row_id
 
@@ -440,9 +451,7 @@ def _cmd_add(conn, args):
             vals)
         row = conn.execute("SELECT id FROM people WHERE platform=? AND platform_id=?",
                            (vals["platform"], vals["platform_id"])).fetchone()
-        index_row(conn, "people", row["id"],
-                  " ".join(filter(None, [vals["nickname"], vals["note"], " ".join(p.get("aliases") or []),
-                                         " ".join(p.get("tags") or [])])))
+        index_from_row(conn, "people", row["id"])
         conn.commit()
         print(f"person #{row['id']} {vals['nickname'] or vals['platform_id']}")
         return
@@ -462,7 +471,7 @@ def _cmd_add(conn, args):
                  updated_at = excluded.updated_at""", vals)
         row = conn.execute("SELECT id FROM people_facts WHERE person_id=? AND key=?",
                            (args.person, args.key)).fetchone()
-        index_row(conn, "people_facts", row["id"], f"{args.key} {args.value}")
+        index_from_row(conn, "people_facts", row["id"])
         conn.commit()
         print(f"fact #{row['id']} {args.key} = {args.value}")
         return
@@ -495,8 +504,7 @@ def _cmd_add(conn, args):
              clip(args.vibe, "groups.vibe", args.no_truncate), args.rules or "",
              args.importance or 0.6))
         row = conn.execute("SELECT id FROM groups WHERE group_id=?", (args.group_id,)).fetchone()
-        index_row(conn, "groups", row["id"],
-                  f"{args.name or ''} {args.vibe or ''} {args.rules or ''}")
+        index_from_row(conn, "groups", row["id"])
         conn.commit()
         print(f"group #{row['id']} {args.name or args.group_id}")
         return
@@ -574,7 +582,7 @@ def cmd_journal(conn, args):
     header = f"# {args.title or args.date}\n\n> {args.date}" + (f" · {args.mood}" if args.mood else "")
     fpath.write_text(header + "\n\n" + body + "\n", encoding="utf-8")
     conn.execute("UPDATE journals SET file_path=? WHERE id=?", (str(fpath), row["id"]))
-    index_row(conn, "journals", row["id"], f"{args.title or ''} {body}")
+    index_from_row(conn, "journals", row["id"])
     conn.commit()
     print(f"journal {args.date} ({len(body)} 字) -> {fpath}")
 
