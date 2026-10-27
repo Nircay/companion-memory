@@ -37,7 +37,7 @@ python3 memory.py recall "她还记得海吗" --budget 600
 ## 安装
 
 ```bash
-git clone <this-repo>
+git clone https://github.com/Nircay/companion-memory.git
 cd companion-memory
 python3 memory.py init
 ```
