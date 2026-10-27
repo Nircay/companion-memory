@@ -15,9 +15,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+      - name: environment
+        run: python -c "import sys,sqlite3;print('py',sys.version.split()[0],'| sqlite',sqlite3.sqlite_version)"
       - name: smoke test
         run: |
-          set -ex
+          set -e
           python memory.py init
           python memory.py add person --json '{"platform_id":"10001","nickname":"小王","note":"爱用反问"}'
           python memory.py add fact --person 1 --key "口味" --value "怕辣" --confidence 0.9
@@ -26,24 +28,11 @@ jobs:
           python memory.py add watch --bvid BV1xx411c7mD --title "深海纪录片" --summary "讲深海生态"
           python memory.py journal --date 2026-10-27 --title "第一次看海" --body "风很大。"
           python memory.py verify
-          python memory.py search "海边"        | grep -q "diary#1"
-          python memory.py search "怕辣"        | grep -q "people_facts#1"
-          python memory.py search "量子物理"    | grep -q "无命中"
-          python memory.py search "2026-10-27"    | grep -q "journals#1"
-          python memory.py search "BV1xx411c7mD"  | grep -q "watch_history#1"
-          python memory.py recall "她还记得海吗" | grep -q "关于这些"
+          python memory.py search "海边" | tee /dev/stderr | grep -q "diary#1"
+          python memory.py search "怕辣" | tee /dev/stderr | grep -q "people_facts#1"
+          python memory.py search "量子物理" | tee /dev/stderr | grep -q "无命中"
+          python memory.py search "2026-10-27" | tee /dev/stderr | grep -q "journals#1"
+          python memory.py search "BV1xx411c7mD" | tee /dev/stderr | grep -q "watch_history#1"
+          python memory.py recall "她还记得海吗" | tee /dev/stderr | grep -q "关于这些"
           python memory.py export ./export
           test -f export/journals/2026-10-27.md
-      - name: diagnose
-        if: failure()
-        run: |
-          python -c "import sqlite3,sys;print('sqlite',sqlite3.sqlite_version,'| py',sys.version)"
-          python memory.py stats
-          echo '--- search 海边 ---'; python memory.py search "海边" || true
-          echo '--- search 2026-10-27 ---'; python memory.py search "2026-10-27" || true
-          echo '--- search BV ---'; python memory.py search "BV1xx411c7mD" || true
-          echo '--- db dump ---'; python -c "
-import sqlite3
-c=sqlite3.connect('whale_memory.db')
-print(c.execute('select domain,ref_id,tokens from search_index').fetchall())
-" 
